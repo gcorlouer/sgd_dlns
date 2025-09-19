@@ -1,0 +1,28 @@
+name: dln-sgd
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - pytorch::pytorch           # CPU by default; replace with cudatoolkit build if you have CUDA
+  - pytorch::torchvision
+  - pip:
+      - tqdm
+      - einops
+      - hydra-core
+      - omegaconf
+      - mlflow                  # or replace with wandb if preferred
+      - wandb
+      - torchsde                # SDE simulation on top of PyTorch (nice for Langevin)
+      - typeguard
+      - pytest
+      - pytest-cov
+      - mypy
+      - ruff
+      - black
+      - pre-commit

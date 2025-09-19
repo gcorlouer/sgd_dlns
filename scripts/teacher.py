@@ -13,6 +13,7 @@ class Teacher():
                  max_singular_value: float = 1.0,
                  min_singular_value: float = 1e-12,
                  decay_rate: float = 2.0,
+                 progression: str = 'power',
                  custom_singular_values: Optional[Tensor] = None):
         """
         Args:
@@ -30,6 +31,7 @@ class Teacher():
         self.min_singular_value: float = min_singular_value
         self.decay_rate: float = decay_rate
         self.custom_singular_values: Optional[Tensor] = custom_singular_values
+        self.progression: str = progression
         
         if seed is not None:
             torch.manual_seed(seed)
@@ -72,9 +74,14 @@ class Teacher():
             S = self.custom_singular_values.clone()
             assert len(S) == self.rank, f"Expected {self.rank} values, got {len(S)}"
             S, _ = torch.sort(S, descending=True)
-        else:
+        elif self.progression == 'power':
             indices = torch.arange(1, self.rank + 1, dtype=torch.float32)
             S = self.max_singular_value * (indices ** (-self.decay_rate))
+            S = torch.clamp(S, min=self.min_singular_value)
+            self._S = S
+        elif self.progression == 'linear':
+            indices = torch.arange(0, self.rank, dtype=torch.float32)
+            S = self.max_singular_value - self.decay_rate * indices
             S = torch.clamp(S, min=self.min_singular_value)
             self._S = S
         return self._S
@@ -106,9 +113,9 @@ class Teacher():
     
     def effective_rank(self, threshold: float = 1e-6) -> int:
         """Compute effective rank: |{i : σ_i ≥ threshold * σ_1}|"""
-        if self._S is None:
-            raise ValueError("Singular values not generated")
-        return (self._S >= threshold * self._S[0]).sum().item()
+        M = self.get_matrix
+        _, S, _ = torch.linalg.svd(M, full_matrices=False)
+        return (S >= threshold * S[0]).sum().item()
     
     def spectral_decay_rate(self) -> float:
         """Estimate exponential decay rate: α such that σ_i ≈ σ_1 * exp(-αi)"""
@@ -188,12 +195,13 @@ class TeacherDataset(Dataset):
         return train_dataset, test_dataset
 
 if __name__ == "__main__":
-    output_dim = 3
-    input_dim = 5
-    rank = 2
+    output_dim = 10
+    input_dim = 10
+    rank = 3
     teacher = Teacher(output_dim=output_dim, input_dim=input_dim, rank=rank)
     _, S, _ = teacher.components
     print(f"Teacher matrix is {teacher.get_matrix}")
+    print(f"Teacher matrix shape is {teacher.get_matrix.shape}")
     print(f"Singular values are {S}")
     print(f"Rank is {teacher.effective_rank()} should be {rank}")
     # Generate dataset

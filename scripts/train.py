@@ -9,6 +9,12 @@ from torch import nn
 from teacher import *
 from models import *
 from pathlib import Path
+import wandb
+
+#wandb.init(
+#    project="sgd-dln",
+#    entity="geeom"   # your personal username
+#)
 
 # Code training loop class with SGD
 class Trainer():
@@ -34,6 +40,7 @@ class Trainer():
         self.train_losses = []
         self.test_losses = []
         self.grad_norms = []
+        self.modes = []
 
     def online_training_loop(self):
         train, test = self.dataset.train_test_split()
@@ -47,6 +54,7 @@ class Trainer():
             train_loss = self.loss(target, y)
             self.train_losses.append(train_loss.item())
             self.test_losses.append(self.evaluate(test_loader).item())
+            self.modes.append(mode)
             # Backward
             self.optimizer.zero_grad()
             train_loss.backward()
@@ -75,9 +83,19 @@ class Trainer():
         for i in tqdm(range(self.num_epochs), desc="Training", unit="epoch"):
             train_loader = DataLoader(train, batch_size=self.batch_size, shuffle=True)
             test_loader = DataLoader(test, batch_size=self.batch_size, shuffle=False)
+            # Calculate and store mode
+            obs = Observable(train.teacher, self.model)
+            mode = obs.mode_matrix()
+            self.modes.append(mode)
+            # Train and Store losses
             train_loss = self.epoch_training_loop(train_loader)
             self.train_losses.append(train_loss)
             self.test_losses.append(self.evaluate(test_loader).item())
+            #wandb.log({
+            #            "train_loss": train_loss,
+            #            "test_loss": self.evaluate(test_loader).item(),
+            #            "epoch": i
+            #        })
 
     def evaluate(self, test_loader: DataLoader):
         test_loss = 0
@@ -91,6 +109,40 @@ class Trainer():
         return test_loss/len(test_loader)
 # Get interesting observables: modes, loss, end of training distribution
 
+
+class Observable():
+    def __init__(self, teacher_matrix: Teacher, model: nn.Module):
+        self.teacher_matrix = teacher_matrix
+        self.model = model
+
+    def weight_matrices_in_io_order(self):
+        """Yield Linear weights in input→output order."""
+        return [m.weight for m in self.model.modules() if isinstance(m, nn.Linear)]
+
+    def weight_product(self) -> torch.Tensor:
+        """
+        Returns W_L @ ... @ W_1 (shape: [out_dim, in_dim]) for a stack of Linear layers.
+        Uses linalg.multi_dot for speed/associativity.
+        """
+        with torch.no_grad():
+            Ws = self.weight_matrices_in_io_order()
+            # Ws is [W1, W2, ..., WL] with shapes [(d1,d0), (d2,d1), ..., (dL,d_{L-1})]
+            # Compose into a single matrix mapping input->output: W_L @ ... @ W_1
+            if len(Ws) == 0:
+                raise ValueError("Model has no nn.Linear layers.")
+            if len(Ws) == 1:
+                return Ws[0]
+            return torch.linalg.multi_dot(Ws[::-1])
+
+    def mode_matrix(self):
+        # Assumes teacher.components returns (U, S, V) with shapes
+        # U: [out_dim, r], S: [r], V: [in_dim, r]
+        U, _, V = self.teacher_matrix.components
+        P = self.weight_product()  # [out_dim, in_dim]
+        # Project learned map onto teacher singular vectors to get mode-wise matrix
+        # result shape: [r, r]
+        return U.T @ P @ V
+    
 # Plotting functions for losses, modes etc
 
 
@@ -101,7 +153,7 @@ if __name__ == '__main__':
     rank = 4
     whiten_inputs = True
     progression = 'linear'
-    noise_std = 0
+    noise_std = 1
     num_hidden_layers = 3
     gamma = 2.5  # \sigma^2 = w^(-gamma)
     lr = 1e-4
@@ -126,6 +178,7 @@ if __name__ == '__main__':
     trainer.training_epochs()
     train_loss = trainer.train_losses
     test_loss = trainer.test_losses
+    modes = trainer.modes
     iterations = np.arange(0, len(train_loss))
     # Get the script's directory, then navigate to results
     script_dir = Path(__file__).parent  # /Users/guime/projects/bias_sgd/sgd_dlns_code/scripts/
@@ -137,5 +190,24 @@ if __name__ == '__main__':
     plt.plot(iterations, train_loss, label="Train loss")
     plt.plot(iterations, test_loss, label="Test loss")
     plt.legend()
+    plt.savefig(fpath)
+    plt.show()
+    # wandb.log({"loss_curve": wandb.Image(plt)})
+    diag_modes = torch.stack([torch.diag(m) for m in modes])
+    fpath = results_dir
+    fname = f"diagonal_mode_rank_{rank}_iter_{len(train_loss)}_max_singular_value_{max_singular_value}_gamma_{gamma}_lr_{lr}_batch_{batch_size}_loss.png"
+    fpath = fpath.joinpath(fname)
+    plt.figure()
+    for i in range(rank):
+        plt.plot(iterations, diag_modes[:,i].numpy(), label="fmode {i}")
+        plt.legend()
+    plt.savefig(fpath)
+    plt.show()
+    fpath = results_dir
+    fname = f"off_diagonal_mode_rank_{rank}_iter_{len(train_loss)}_max_singular_value_{max_singular_value}_gamma_{gamma}_lr_{lr}_batch_{batch_size}_loss.png"
+    fpath = fpath.joinpath(fname)
+    off_diag_modes = np.stack([torch.mean(torch.triu(m, diagonal=1)).numpy() for m in modes])
+    plt.figure()
+    plt.plot(iterations, off_diag_modes, label="fmode {i}")
     plt.savefig(fpath)
     plt.show()

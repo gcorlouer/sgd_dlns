@@ -1,0 +1,17 @@
+{
+  "os": "macOS-14.2.1-arm64-arm-64bit",
+  "python": "CPython 3.12.11",
+  "startedAt": "2025-09-22T11:25:57.107093Z",
+  "program": "/Users/guime/projects/bias_sgd/sgd_dlns_code/scripts/train.py",
+  "codePath": "scripts/train.py",
+  "codePathLocal": "scripts/train.py",
+  "git": {
+    "remote": "git@github.com:gcorlouer/sgd_dlns.git",
+    "commit": "9e565ef60a8efbab5cc29dd7e6f6e9f5c12a01a0"
+  },
+  "email": "guillaume.corlouer@gmail.com",
+  "root": "/Users/guime/projects/bias_sgd/sgd_dlns_code",
+  "host": "Guillaumes-MBP.SafeAI-Sec.local",
+  "executable": "/Users/guime/anaconda3/envs/dln-sgd/bin/python",
+  "writerId": "o46p2fdr3nk5uz8ivid1hg1siwbukhbp"
+}

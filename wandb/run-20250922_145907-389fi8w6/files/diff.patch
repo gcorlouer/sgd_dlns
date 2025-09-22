@@ -1,0 +1,76 @@
+diff --git a/scripts/train.py b/scripts/train.py
+index 099a78f..ee4a024 100644
+--- a/scripts/train.py
++++ b/scripts/train.py
+@@ -9,6 +9,12 @@ from torch import nn
+ from teacher import *
+ from models import *
+ from pathlib import Path
++import wandb
++
++wandb.init(
++    project="sgd-dln",
++    entity="geeom"   # your personal username
++)
+ 
+ # Code training loop class with SGD
+ class Trainer():
+@@ -78,6 +84,11 @@ class Trainer():
+             train_loss = self.epoch_training_loop(train_loader)
+             self.train_losses.append(train_loss)
+             self.test_losses.append(self.evaluate(test_loader).item())
++            wandb.log({
++                        "train_loss": train_loss,
++                        "test_loss": self.evaluate(test_loader).item(),
++                        "epoch": i
++                    })
+ 
+     def evaluate(self, test_loader: DataLoader):
+         test_loss = 0
+@@ -91,6 +102,19 @@ class Trainer():
+         return test_loss/len(test_loader)
+ # Get interesting observables: modes, loss, end of training distribution
+ 
++
++class Observable():
++    def __init__(self, teacher_matrix: Teacher, model: DLN):
++        self.teacher_matrix = teacher_matrix
++        self.model = model
++
++    def mode_matrix(self):
++        U, _, V = self.teacher_matrix.components
++        params = model.parameters()
++        product = 1
++        product *= [w for w in params]
++        return U.T @ product @ V
++    
+ # Plotting functions for losses, modes etc
+ 
+ 
+@@ -101,7 +125,7 @@ if __name__ == '__main__':
+     rank = 4
+     whiten_inputs = True
+     progression = 'linear'
+-    noise_std = 0
++    noise_std = 1
+     num_hidden_layers = 3
+     gamma = 2.5  # \sigma^2 = w^(-gamma)
+     lr = 1e-4
+@@ -122,6 +146,9 @@ if __name__ == '__main__':
+                 output_dim=output_dim, 
+                 num_hidden_layers=num_hidden_layers,
+                 gamma=gamma)
++    obs = Observable(teacher, model)
++    modes = obs.mode_matrix()
++    print(f"mode shape is {modes.shape} should be {teacher.matrix().shape}")
+     trainer = Trainer(teacher, dataset, model, lr=lr, batch_size=batch_size, num_epochs=num_epochs)
+     trainer.training_epochs()
+     train_loss = trainer.train_losses
+@@ -138,4 +165,5 @@ if __name__ == '__main__':
+     plt.plot(iterations, test_loss, label="Test loss")
+     plt.legend()
+     plt.savefig(fpath)
+-    plt.show()
+\ No newline at end of file
++    plt.show()
++    wandb.log({"loss_curve": wandb.Image(plt)})

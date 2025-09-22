@@ -1,0 +1,46 @@
+_wandb:
+    value:
+        cli_version: 0.21.4
+        code_path: code/scripts/train.py
+        e:
+            glribc8ll5cdsr5x8cl40y8gqoj1beit:
+                apple:
+                    ecpuCores: 4
+                    gpuCores: 16
+                    memoryGb: 16
+                    name: Apple M2 Pro
+                    pcpuCores: 6
+                    ramTotalBytes: "17179869184"
+                codePath: scripts/train.py
+                codePathLocal: scripts/train.py
+                cpu_count: 10
+                cpu_count_logical: 10
+                disk:
+                    /:
+                        total: "494384795648"
+                        used: "391167664128"
+                email: guillaume.corlouer@gmail.com
+                executable: /Users/guime/anaconda3/envs/dln-sgd/bin/python
+                git:
+                    commit: 9e565ef60a8efbab5cc29dd7e6f6e9f5c12a01a0
+                    remote: git@github.com:gcorlouer/sgd_dlns.git
+                host: Guillaumes-MBP.SafeAI-Sec.local
+                memory:
+                    total: "17179869184"
+                os: macOS-14.2.1-arm64-arm-64bit
+                program: /Users/guime/projects/bias_sgd/sgd_dlns_code/scripts/train.py
+                python: CPython 3.12.11
+                root: /Users/guime/projects/bias_sgd/sgd_dlns_code
+                startedAt: "2025-09-22T11:31:11.966328Z"
+                writerId: glribc8ll5cdsr5x8cl40y8gqoj1beit
+        m: []
+        python_version: 3.12.11
+        t:
+            "1":
+                - 1
+            "2":
+                - 1
+            "4": 3.12.11
+            "5": 0.21.4
+            "12": 0.21.4
+            "13": darwin-arm64

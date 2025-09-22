@@ -1,0 +1,8 @@
+Training:   0%|            | 0/10000 [00:00<?, ?epoch/s]
+Traceback (most recent call last):
+  File "/Users/guime/projects/bias_sgd/sgd_dlns_code/scripts/train.py", line 137, in <module>
+    trainer.training_epochs()
+  File "/Users/guime/projects/bias_sgd/sgd_dlns_code/scripts/train.py", line 89, in training_epochs
+    "test_loss": test_loss,
+                 ^^^^^^^^^
+NameError: name 'test_loss' is not defined

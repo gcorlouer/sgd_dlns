@@ -125,24 +125,23 @@ def test_hidden_dims_list_overrides_num_hidden_layers():
     assert model.hidden_dims == hidden_list
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Depth=0 causes IndexError in _initialize_weights "
-        "when accessing self.hidden_dims[0] on empty list. "
-        "Fix: use per-layer std based on min(in_features, out_features) "
-        "or handle empty hidden_dims case."
-    )
-)
 def test_depth_zero_construction():
     """Test constructing DLN with no hidden layers (direct input->output)."""
-    # This should create a single layer network
+    # This should create a single layer network (input -> output, no hidden)
     model = DLN(
         input_dim=5, hidden_dims=10, output_dim=3, num_hidden_layers=0, bias=False
     )
 
-    # If it doesn't crash, verify it's a single layer
-    assert len(model.layers) == 1
-    assert model.layers[0].weight.shape == (3, 5)
+    # Verify it's a single layer
+    assert len(model.layers) == 1, "Depth-0 network should have exactly 1 layer"
+    assert model.layers[0].weight.shape == (3, 5), (
+        "Single layer should map input_dim=5 to output_dim=3"
+    )
+
+    # Test forward pass works
+    x = torch.randn(4, 5)
+    y = model(x)
+    assert y.shape == (4, 3), "Forward pass should produce correct output shape"
 
 
 # ============================================================================
@@ -477,7 +476,11 @@ def test_1d_input_behavior():
 
 
 def test_initialization_scaling():
-    """Test that weight initialization follows specified std formula."""
+    """Test that weight initialization follows specified std formula.
+
+    Each layer uses its bottleneck dimension (min of in/out features)
+    to compute std = width^(-gamma/2).
+    """
     gamma = 2.0
     hidden_dim = 16
     model = DLN(
@@ -489,14 +492,17 @@ def test_initialization_scaling():
         bias=False,
     )
 
-    # Expected std: (hidden_dim) ** (-gamma / 2)
-    expected_std = hidden_dim ** (-gamma / 2)
-
-    # Check each layer's actual std
+    # Check each layer's actual std matches its bottleneck-based formula
     for i, layer in enumerate(model.layers):
+        # Compute expected std based on bottleneck dimension
+        out_features, in_features = layer.weight.shape
+        width = min(out_features, in_features)
+        expected_std = width ** (-gamma / 2)
+
         actual_std = layer.weight.std(unbiased=False).item()
         assert abs(actual_std - expected_std) / expected_std < 0.3, (
-            f"Layer {i}: expected std ≈ {expected_std:.4f}, "
+            f"Layer {i} ({in_features}→{out_features}): "
+            f"expected std ≈ {expected_std:.4f} (width={width}), "
             f"got {actual_std:.4f} (rtol=0.3 due to finite samples)"
         )
 

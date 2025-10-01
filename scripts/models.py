@@ -60,15 +60,20 @@ class DLN(nn.Module):
         return nn.Linear(in_features, out_features, bias=bias)
 
     def _initialize_weights(self):
-        """Initialize weights using σ² = w^(-γ) scaling."""
-        # Paper uses rectangular networks where all hidden layers have same width
-        width = self.hidden_dims[0]
+        """Initialize weights using σ² = w^(-γ) scaling.
 
-        # Paper's exact formula: σ² = w^(-γ)
-        variance = width ** (-self.gamma)
-        std = variance**0.5
-
+        For each layer, uses the bottleneck dimension (min of in/out features)
+        to compute the initialization scale. This handles depth=0 networks
+        and heterogeneous layer widths.
+        """
         for layer in self.layers:
+            # Use bottleneck dimension for initialization scale
+            width = min(layer.weight.shape[0], layer.weight.shape[1])
+
+            # Paper's formula: σ² = w^(-γ)
+            variance = width ** (-self.gamma)
+            std = variance**0.5
+
             nn.init.normal_(layer.weight, mean=0.0, std=std)
             if layer.bias is not None:
                 nn.init.zeros_(layer.bias)

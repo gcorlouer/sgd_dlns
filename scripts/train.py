@@ -518,21 +518,21 @@ if __name__ == "__main__":
     # Plot and save loss curves
     fname = f"iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_loss.png"
     fpath = results_dir / fname
-    plot_loss_curves(train_loss, test_loss, save_path=fpath, show=True)
+    plot_loss_curves(train_loss, test_loss, save_path=fpath, show=False)
     if args.wandb_mode != "disabled":
         wandb.log({"loss_curve": wandb.Image(str(fpath))})
 
     # Plot diagonal modes
     fname = f"diagonal_mode_rank_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_loss.png"
     fpath = results_dir / fname
-    plot_diagonal_modes(modes, args.rank, save_path=fpath, show=True)
+    plot_diagonal_modes(modes, args.rank, save_path=fpath, show=False)
     if args.wandb_mode != "disabled":
         wandb.log({"diagonal_modes": wandb.Image(str(fpath))})
 
     # Plot off-diagonal modes
     fname = f"off_diagonal_mode_rank_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_loss.png"
     fpath = results_dir / fname
-    plot_off_diagonal_modes(modes, save_path=fpath, show=True)
+    plot_off_diagonal_modes(modes, save_path=fpath, show=False)
     if args.wandb_mode != "disabled":
         wandb.log({"off_diagonal_modes": wandb.Image(str(fpath))})
 

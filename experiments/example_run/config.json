@@ -1,0 +1,23 @@
+{
+  "input_dim": 10,
+  "hidden_dims": 100,
+  "output_dim": 10,
+  "num_hidden_layers": 3,
+  "gamma": 2.5,
+  "bias": false,
+  "teacher_rank": 4,
+  "max_singular_value": 100,
+  "decay_rate": 10,
+  "progression": "linear",
+  "n_samples": 20,
+  "noise_std": 1.0,
+  "whiten_inputs": true,
+  "lr": 0.0001,
+  "batch_size": 1,
+  "num_epochs": 1000,
+  "device": "cpu",
+  "log_interval": 100,
+  "save_checkpoints": true,
+  "checkpoint_interval": 500,
+  "seed": 42
+}

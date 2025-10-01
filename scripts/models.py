@@ -116,6 +116,25 @@ class DLN(nn.Module):
                 torch.linalg.matrix_rank(layer.weight).item() for layer in self.layers
             ]
 
+    def effective_map(self) -> Tensor:
+        """Compute the effective linear map W_eff = W_L @ ... @ W_1.
+
+        Returns the composed transformation matrix without calling forward on data.
+
+        Returns:
+            Tensor of shape [output_dim, input_dim] representing the end-to-end map.
+        """
+        with torch.no_grad():
+            # For L layers with weights W_1, ..., W_L, compute W_L @ ... @ W_1
+            if len(self.layers) == 0:
+                raise ValueError("Model has no layers")
+            if len(self.layers) == 1:
+                return self.layers[0].weight.clone()
+
+            # Reverse order for multi_dot: [W_L, ..., W_1]
+            weights = [layer.weight for layer in reversed(self.layers)]
+            return torch.linalg.multi_dot(weights)
+
 
 if __name__ == "__main__":
     # Test the implementation

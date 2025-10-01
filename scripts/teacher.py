@@ -79,6 +79,7 @@ class Teacher:
             S = self.custom_singular_values.clone()
             assert len(S) == self.rank, f"Expected {self.rank} values, got {len(S)}"
             S, _ = torch.sort(S, descending=True)
+            self._S = S
         elif self.progression == "power":
             indices = torch.arange(1, self.rank + 1, dtype=torch.float32)
             S = self.max_singular_value * (indices ** (-self.decay_rate))

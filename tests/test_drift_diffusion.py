@@ -64,7 +64,6 @@ def test_gradient_norm():
     
     grad_norm = obs.gradient_norm()
     
-    # Fixed assertions
     assert grad_norm.dim() == 0, f"grad norm should be scalar, got shape {grad_norm.shape}"
     assert grad_norm.item() >= 0, f"grad norm should be non-negative, got {grad_norm.item()}"
 

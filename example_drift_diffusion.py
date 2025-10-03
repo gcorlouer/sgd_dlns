@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 from scripts.models import DLN
 from scripts.teacher import Teacher, TeacherDataset
-from metrics.drift_diffusion import DriftDiffusionTracker
+from observables.drift_diffusion import DriftDiffusionTracker
 
 
 def main():

@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 from dataclasses import dataclass, asdict
-from typing import Optional, Dict, List
+from typing import Optional, Union, List, Dict
+
 import json
 
 from torch.utils.data import DataLoader
@@ -28,11 +29,11 @@ class ExperimentConfig:
     """
 
     # Model architecture
-    input_dim: int
-    hidden_dims: int | List[int]
-    output_dim: int
-    num_hidden_layers: int
-    gamma: float
+    input_dim: int = 4
+    hidden_dims: Union[int, List[int]] = 10
+    output_dim: int = 4
+    num_hidden_layers: int = 3
+    gamma: float = 2
     bias: bool = False
 
     # Teacher configuration

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from typing import Optional
+from typing import Optional, Union, List
 
 
 class DLN(nn.Module):
@@ -22,7 +22,7 @@ class DLN(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        hidden_dims: int | list[int],
+        hidden_dims: Union[int, List[int]],
         output_dim: int,
         num_hidden_layers: int = 3,
         gamma: float = 1.5,

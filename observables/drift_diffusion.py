@@ -24,7 +24,7 @@ class DriftDiffusion(nn.Module):
         except StopIteration:
             self.device = torch.device('cpu')
 
-    def gradient_vector(self):
+    def gradient_vector(self) -> torch.Tensor:
         grads = []
         for param in self.model.parameters():
             if param.grad is None:
@@ -34,12 +34,12 @@ class DriftDiffusion(nn.Module):
             grads.append(param.grad.flatten())
         return torch.cat(grads)
 
-    def gradient_norm(self):
+    def gradient_norm(self) -> torch.Tensor:
         """Compute ||∇L||_2 from current .grad attributes."""
         gradient = self.gradient_vector()
         return torch.linalg.vector_norm(gradient)
 
-    def approximate_empirical_gradient(self):
+    def approximate_empirical_gradient(self) -> None:
         """Compute gradient on large random batch."""
         self.model.zero_grad()
 
@@ -47,41 +47,46 @@ class DriftDiffusion(nn.Module):
         indices = torch.randperm(len(self.dataset))[:n_samples].tolist()
 
         batch, target = self.dataset[indices]
+        batch, target = batch.to(self.device), target.to(self.device)
         y = self.model(batch)
         loss = self.loss(y, target)
         loss.backward()
 
-    def compute_drift(self):
+    def compute_drift(self) -> torch.Tensor:
         """Compute drift: η ||∇L||_2"""
         self.approximate_empirical_gradient()
         grad_norm = self.gradient_norm()
         return self.cfg.lr * grad_norm
 
-    def noise_vector(self, batch, target):
-        self.approximate_empirical_gradient()
-        empirical_gradient = self.gradient_vector()
-
+    def gradient_noise_vector(self, empirical_gradient: torch.Tensor,
+                              batch: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Compute gradient noise: ∇L - ∇L_batch"""
         self.model.zero_grad()
         y = self.model(batch)
         loss = self.loss(y, target)
         loss.backward()
 
-        batch_gradient = self.gradient_vector() 
-        
+        batch_gradient = self.gradient_vector()
+
         return empirical_gradient - batch_gradient
         
-    def compute_diffusion(self):
-        diffusion = 0
+    def compute_diffusion(self) -> torch.Tensor:
+        """Compute diffusion: (η/B) Σ ||∇L - ∇L_batch||_2"""
+        diffusion = torch.tensor(0.0, device=self.device)
         data = DataLoader(
                 self.dataset, batch_size=self.cfg.batch_size, shuffle=True
             )
+        self.approximate_empirical_gradient()
+        empirical_gradient = self.gradient_vector()
         for batch, target in data:
-            noise = self.noise_vector(batch, target)
-        diffusion += torch.linalg.vector_norm(noise)
-        diffusion = self.cfg.lr/self.cfg.batch_size * diffusion
+            batch, target = batch.to(self.device), target.to(self.device)
+            noise = self.gradient_noise_vector(empirical_gradient, batch, target)
+            diffusion += torch.linalg.vector_norm(noise)
+        diffusion = self.cfg.lr / self.cfg.batch_size * diffusion
         return diffusion
 
-    def drift_diffusion_ratio(self):
+    def drift_diffusion_ratio(self) -> torch.Tensor:
+        """Compute drift/diffusion ratio: (η ||∇L||) / ((η/B) Σ ||noise||)"""
         drift = self.compute_drift()
         diffusion = self.compute_diffusion()
-        return drift/diffusion
+        return drift / diffusion

@@ -1,9 +1,6 @@
 import torch
 import numpy as np
-from dataclasses import dataclass, asdict
-from typing import Optional, Union, List, Dict
-
-import json
+from typing import Optional, List, Dict
 
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -12,65 +9,16 @@ from torch import nn
 from scripts.teacher import Teacher, TeacherDataset
 from scripts.models import DLN
 from scripts.metrics import Observable
+from scripts.config import ExperimentConfig
+from observables.drift_diffusion import DriftDiffusion
 from scripts.plotting import (
     plot_loss_curves,
     plot_diagonal_modes,
     plot_off_diagonal_modes,
+    plot_drift_vs_diffusion
 )
 from pathlib import Path
 import wandb
-
-
-@dataclass
-class ExperimentConfig:
-    """Configuration for a DLN training experiment.
-
-    Captures all hyperparameters needed for reproducibility.
-    """
-
-    # Model architecture
-    input_dim: int = 4
-    hidden_dims: Union[int, List[int]] = 10
-    output_dim: int = 4
-    num_hidden_layers: int = 3
-    gamma: float = 2
-    bias: bool = False
-
-    # Teacher configuration
-    teacher_rank: int = 4
-    max_singular_value: float = 100.0
-    decay_rate: float = 10.0
-    progression: str = "linear"
-
-    # Dataset configuration
-    n_samples: int = 20
-    noise_std: float = 1.0
-    whiten_inputs: bool = True
-
-    # Training configuration
-    lr: float = 1e-4
-    batch_size: int = 1
-    num_epochs: int = 100000
-    device: str = "cpu"
-
-    # Logging configuration
-    log_interval: int = 100  # How often to compute expensive metrics
-    save_checkpoints: bool = False
-    checkpoint_interval: int = 10000
-
-    # Reproducibility
-    seed: Optional[int] = None
-
-    def save(self, path: Path):
-        """Save config to JSON file."""
-        with open(path, "w") as f:
-            json.dump(asdict(self), f, indent=2)
-
-    @classmethod
-    def load(cls, path: Path) -> "ExperimentConfig":
-        """Load config from JSON file."""
-        with open(path, "r") as f:
-            return cls(**json.load(f))
 
 
 class Trainer:
@@ -85,13 +33,7 @@ class Trainer:
         teacher: Teacher,
         dataset: TeacherDataset,
         model: DLN,
-        lr: float = 0.01,
-        batch_size: int = 1,
-        num_epochs: int = 1000,
-        device: str = "cpu",
-        log_interval: int = 1,  # How often to log expensive metrics
-        save_dir: Optional[Path] = None,  # Where to save checkpoints
-        checkpoint_interval: int = 10000,  # How often to save
+        cfg: ExperimentConfig
     ):
         """Initialize trainer.
 
@@ -109,14 +51,15 @@ class Trainer:
         """
         self.teacher = teacher
         self.dataset = dataset
-        self.model = model.to(device)
-        self.lr = lr
-        self.batch_size = batch_size
-        self.num_epochs = num_epochs
-        self.device = device
-        self.log_interval = log_interval
-        self.save_dir = save_dir
-        self.checkpoint_interval = checkpoint_interval
+        self.model = model.to(cfg.device)
+        self.cfg = cfg
+        self.lr = cfg.lr
+        self.batch_size = cfg.batch_size
+        self.num_epochs = cfg.num_epochs
+        self.device = cfg.device
+        self.log_interval = cfg.log_interval
+        self.save_dir = Path(cfg.save_dir) if cfg.save_dir else None
+        self.checkpoint_interval = cfg.checkpoint_interval 
 
         if self.save_dir:
             self.save_dir.mkdir(parents=True, exist_ok=True)
@@ -129,6 +72,7 @@ class Trainer:
         self.test_losses: List[float] = []
         self.grad_norms: List[float] = []
         self.modes: List[torch.Tensor] = []
+        self.drift_vs_diffusion: List[torch.Tensor] = []
         self.logged_epochs: List[int] = []  # Track which epochs have full metrics
 
     @property
@@ -203,6 +147,7 @@ class Trainer:
             "test_losses": self.test_losses,
             "grad_norms": self.grad_norms,
             "modes": self.modes,
+            "drift_vs_diffusion": self.drift_vs_diffusion,
             "logged_epochs": self.logged_epochs,
         }
 
@@ -218,6 +163,7 @@ class Trainer:
         self.test_losses = checkpoint["test_losses"]
         self.grad_norms = checkpoint.get("grad_norms", [])
         self.modes = checkpoint.get("modes", [])
+        self.drift_vs_diffusion = checkpoint.get("drift_vs_diffusion", [])
         self.logged_epochs = checkpoint.get("logged_epochs", [])
 
         return checkpoint["epoch"]
@@ -254,6 +200,11 @@ class Trainer:
                 self.grad_norms.append(observables["grad_norm"].item())
                 self.logged_epochs.append(epoch)
 
+                # Compute drift-diffusion (can be at different interval if needed)
+                if epoch % self.cfg.drift_diffusion_interval == 0 or epoch == self.num_epochs - 1:
+                    obs = DriftDiffusion(self.model, self.cfg, dataset=train, loss=self.loss)
+                    self.drift_vs_diffusion.append(obs.drift_diffusion_ratio())
+
             # Save checkpoint at intervals
             if (
                 self.save_dir
@@ -282,7 +233,7 @@ class Trainer:
                 test, batch_size=self.batch_size, shuffle=False
             )
 
-            # Compute observables before training (original behavior)
+            # Compute observables before training
             obs = Observable(train.teacher, self.model)
             mode = obs.mode_matrix()
             self.modes.append(mode)
@@ -292,8 +243,6 @@ class Trainer:
             self.train_losses.append(train_loss)
             self.test_losses.append(self.evaluate(test_loader).item())
 
-
-# Plotting functions for losses, modes etc
 
 
 def parse_args():
@@ -366,6 +315,12 @@ def parse_args():
         type=int,
         default=100,
         help="Compute expensive metrics every N epochs",
+    )
+    parser.add_argument(
+        "--drift-diffusion-interval",
+        type=int,
+        default=100,
+        help="Compute drift-diffusion every N epochs",
     )
     parser.add_argument(
         "--save-dir",
@@ -457,45 +412,43 @@ if __name__ == "__main__":
     # Setup save directory if specified
     save_dir = Path(args.save_dir) if args.save_dir else None
 
-    # Save experiment configuration
-    if args.save_config and save_dir:
-        save_dir.mkdir(parents=True, exist_ok=True)
-        config = ExperimentConfig(
-            input_dim=args.input_dim,
-            hidden_dims=args.hidden_dim,
-            output_dim=args.output_dim,
-            num_hidden_layers=args.num_hidden_layers,
-            gamma=args.gamma,
-            teacher_rank=args.rank,
-            max_singular_value=args.max_singular_value,
-            decay_rate=args.decay_rate,
-            progression=args.progression,
-            n_samples=args.n_samples,
-            noise_std=args.noise_std,
-            whiten_inputs=args.whiten_inputs,
-            lr=args.lr,
-            batch_size=args.batch_size,
-            num_epochs=args.num_epochs,
-            device=args.device,
-            log_interval=args.log_interval,
-            save_checkpoints=(save_dir is not None),
-            checkpoint_interval=args.checkpoint_interval,
-            seed=args.seed,
-        )
-        config.save(save_dir / "config.json")
-
-    # Create trainer with new features
-    trainer = Trainer(
-        teacher,
-        dataset,
-        model,
+    # Create experiment configuration
+    config = ExperimentConfig(
+        input_dim=args.input_dim,
+        hidden_dims=args.hidden_dim,
+        output_dim=args.output_dim,
+        num_hidden_layers=args.num_hidden_layers,
+        gamma=args.gamma,
+        teacher_rank=args.rank,
+        max_singular_value=args.max_singular_value,
+        decay_rate=args.decay_rate,
+        progression=args.progression,
+        n_samples=args.n_samples,
+        noise_std=args.noise_std,
+        whiten_inputs=args.whiten_inputs,
         lr=args.lr,
         batch_size=args.batch_size,
         num_epochs=args.num_epochs,
         device=args.device,
         log_interval=args.log_interval,
-        save_dir=save_dir,
+        drift_diffusion_interval=args.drift_diffusion_interval,
+        save_dir=args.save_dir,
+        save_checkpoints=(save_dir is not None),
         checkpoint_interval=args.checkpoint_interval,
+        seed=args.seed,
+    )
+
+    # Save experiment configuration if requested
+    if args.save_config and save_dir:
+        save_dir.mkdir(parents=True, exist_ok=True)
+        config.save(save_dir / "config.json")
+
+    # Create trainer with new features
+    trainer = Trainer(
+        teacher=teacher,
+        dataset=dataset,
+        model=model,
+        cfg=config,
     )
 
     # Train model (use new train() method with efficient logging)
@@ -504,6 +457,7 @@ if __name__ == "__main__":
     train_loss = trainer.train_losses
     test_loss = trainer.test_losses
     modes = trainer.modes
+    drift_vs_diffusion = trainer.drift_vs_diffusion
     logged_epochs = trainer.logged_epochs
 
     # Log metrics to W&B
@@ -536,5 +490,14 @@ if __name__ == "__main__":
     plot_off_diagonal_modes(modes, save_path=fpath, show=False)
     if args.wandb_mode != "disabled":
         wandb.log({"off_diagonal_modes": wandb.Image(str(fpath))})
+
+    print(f"\nTraining complete! Results saved to {results_dir}")
+
+    # Plot drift vs diffusion
+    fname = f"drift_vs_diffusion_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_loss.png"
+    fpath = results_dir / fname
+    plot_drift_vs_diffusion(drift_vs_diffusion, save_path=fpath, show=False)
+    if args.wandb_mode != "disabled":
+        wandb.log({"drift_vs_diffusion": wandb.Image(str(fpath))})
 
     print(f"\nTraining complete! Results saved to {results_dir}")

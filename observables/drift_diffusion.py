@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from typing import Optional
 from scripts.models import DLN
-from scripts.train import ExperimentConfig
+from scripts.config import ExperimentConfig
 from scripts.teacher import TeacherDataset
 
 

@@ -116,3 +116,21 @@ def plot_off_diagonal_modes(
         plt.show()
 
     return fig
+
+def plot_drift_vs_diffusion(drift_vs_diffusion: List[torch.Tensor], save_path: Optional[Path] = None, show: bool = True
+) -> plt.Figure:
+    iterations = np.arange(len(drift_vs_diffusion))
+    drift_vs_diffusion = torch.stack([drift_vs_diffusion[m] for m in range(len(drift_vs_diffusion))])
+    fig = plt.figure()
+    plt.plot(iterations, drift_vs_diffusion.numpy())
+    plt.xlabel("Iterations")
+    plt.ylabel("Drift vs Diffusion ratio")
+    plt.grid(True, alpha=0.3)
+
+    if save_path:
+        plt.savefig(save_path)
+    if show:
+        plt.show()
+
+    return fig
+

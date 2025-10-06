@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+
+from torch.utils.data import DataLoader
 from typing import Optional
 from scripts.models import DLN
 from scripts.train import ExperimentConfig
@@ -44,23 +46,12 @@ class DriftDiffusion(nn.Module):
         n_samples = min(self.eval_batch_size, len(self.dataset))
         indices = torch.randperm(len(self.dataset))[:n_samples].tolist()
 
-        batches = []
-        targets = []
-        for idx in indices:
-            b, t = self.dataset[idx]
-            batches.append(b)
-            targets.append(t)
-        batch = torch.stack(batches)
-        target = torch.stack(targets)
-
-        batch = batch.to(self.device)
-        target = target.to(self.device)
-
+        batch, target = self.dataset[indices]
         y = self.model(batch)
         loss = self.loss(y, target)
         loss.backward()
 
-    def drift(self):
+    def compute_drift(self):
         """Compute drift: η ||∇L||_2"""
         self.approximate_empirical_gradient()
         grad_norm = self.gradient_norm()
@@ -79,20 +70,18 @@ class DriftDiffusion(nn.Module):
         
         return empirical_gradient - batch_gradient
         
-    def diffusion_matrix(self):
-        sigma = 0
-        m = len(self.dataset)
-        for batch, target in self.dataset:
+    def compute_diffusion(self):
+        diffusion = 0
+        data = DataLoader(
+                self.dataset, batch_size=self.cfg.batch_size, shuffle=True
+            )
+        for batch, target in data:
             noise = self.noise_vector(batch, target)
-            sigma += noise @ noise.T
-        sigma = 1/m * sigma
-        return sigma
-    
-    def diffusion_norm(self):
-        sigma = self.diffusion_matrix()
-        return self.cfg.lr/self.cfg.batch_size * torch.trace(sigma)
+        diffusion += torch.linalg.vector_norm(noise)
+        diffusion = self.cfg.lr/self.cfg.batch_size * diffusion
+        return diffusion
 
     def drift_diffusion_ratio(self):
-        drift = self.drift()
-        diffusion = self.diffusion_norm()
+        drift = self.compute_drift()
+        diffusion = self.compute_diffusion()
         return drift/diffusion

@@ -111,7 +111,7 @@ def test_eval_drift():
     )
     
     obs = DriftDiffusion(model, cfg, dataset, eval_batch_size=cfg.n_samples)
-    eval_drift = obs.drift()
+    eval_drift = obs.compute_drift()
     
     # Manual computation
     batch, target = dataset[:]
@@ -131,3 +131,100 @@ def test_eval_drift():
     
     assert torch.isclose(eval_drift, true_drift, rtol=1e-4), \
         f"Eval drift {eval_drift} != true drift {true_drift}, diff = {eval_drift - true_drift}"
+    
+def test_diffusion():
+    cfg = ExperimentConfig(
+        input_dim=3,
+        hidden_dims=5,
+        output_dim=3,
+        num_hidden_layers=2,
+        bias=False,
+        lr=0.01,
+        teacher_rank=2,
+        max_singular_value=10,
+        decay_rate=1.0,
+        progression='linear',
+        seed=42,
+        batch_size=1,
+        n_samples=100,
+        noise_std=0.01,
+        whiten_inputs=True,
+    )
+    
+    model = DLN(
+        input_dim=cfg.input_dim,
+        hidden_dims=cfg.hidden_dims,
+        output_dim=cfg.output_dim,
+        num_hidden_layers=cfg.num_hidden_layers,
+        bias=False
+    )
+    
+    teacher = Teacher(
+        output_dim=cfg.output_dim,
+        input_dim=cfg.input_dim,
+        rank=cfg.teacher_rank,
+        max_singular_value=cfg.max_singular_value,
+        decay_rate=cfg.decay_rate,
+        progression=cfg.progression,
+        seed=cfg.seed,
+    )
+
+    dataset = TeacherDataset(
+        teacher,
+        n_samples=cfg.n_samples,
+        noise_std=cfg.noise_std,
+        whiten_inputs=cfg.whiten_inputs,
+        seed=cfg.seed,
+    )
+
+    obs = DriftDiffusion(model, cfg, dataset, eval_batch_size=50)
+    diffusion = obs.compute_diffusion()
+    assert diffusion >= 0, f"Diffusion should be non negative currently is {diffusion}"
+    ratio = obs.drift_diffusion_ratio()
+    cfg = ExperimentConfig(
+        input_dim=3,
+        hidden_dims=5,
+        output_dim=3,
+        num_hidden_layers=2,
+        bias=False,
+        lr=0,
+        teacher_rank=2,
+        max_singular_value=10,
+        decay_rate=1.0,
+        progression='linear',
+        seed=42,
+        batch_size=1,
+        n_samples=100,
+        noise_std=0.01,
+        whiten_inputs=True,
+    )
+    
+    model = DLN(
+        input_dim=cfg.input_dim,
+        hidden_dims=cfg.hidden_dims,
+        output_dim=cfg.output_dim,
+        num_hidden_layers=cfg.num_hidden_layers,
+        bias=False
+    )
+    
+    teacher = Teacher(
+        output_dim=cfg.output_dim,
+        input_dim=cfg.input_dim,
+        rank=cfg.teacher_rank,
+        max_singular_value=cfg.max_singular_value,
+        decay_rate=cfg.decay_rate,
+        progression=cfg.progression,
+        seed=cfg.seed,
+    )
+
+    dataset = TeacherDataset(
+        teacher,
+        n_samples=cfg.n_samples,
+        noise_std=cfg.noise_std,
+        whiten_inputs=cfg.whiten_inputs,
+        seed=cfg.seed,
+    )
+
+    obs = DriftDiffusion(model, cfg, dataset, eval_batch_size=50)
+    diffusion = obs.compute_diffusion()
+    assert diffusion == 0, f"Diffusion should be zero because learning rate is {cfg.lr}but diffusion is {ratio}"

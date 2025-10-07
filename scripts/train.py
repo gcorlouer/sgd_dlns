@@ -264,7 +264,7 @@ def parse_args():
     parser.add_argument(
         "--gamma",
         type=float,
-        default=2.5,
+        default=4,
         help="Initialization exponent: sigma^2 = w^(-gamma)",
     )
 
@@ -313,13 +313,13 @@ def parse_args():
     parser.add_argument(
         "--log-interval",
         type=int,
-        default=100,
+        default=10,
         help="Compute expensive metrics every N epochs",
     )
     parser.add_argument(
         "--drift-diffusion-interval",
         type=int,
-        default=100,
+        default=10,
         help="Compute drift-diffusion every N epochs",
     )
     parser.add_argument(

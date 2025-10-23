@@ -117,6 +117,45 @@ def plot_off_diagonal_modes(
 
     return fig
 
+
+def plot_drift_and_diffusion(train_loss: List[float],
+    test_loss: List[float], drift_vs_diffusion: List[torch.Tensor], drifts: List[torch.Tensor], diffusions: List[torch.Tensor],
+    save_path: Optional[Path] = None, show: bool = True
+) -> plt.Figure:
+    iterations = np.arange(len(drifts))
+    drifts = torch.stack([drifts[m] for m in range(len(drifts))])
+    diffusions = torch.stack([diffusions[m] for m in range(len(drifts))])
+    snr = torch.stack([drift_vs_diffusion[m] for m in range(len(drift_vs_diffusion))])
+
+    fig, ax = plt.subplots(2, 2, sharex=True)
+    ax[0, 0].plot(iterations, drifts.numpy())
+    ax[0, 0].set_ylabel("Drift")
+    ax[0, 0].set_xlabel("Iterations")
+    ax[0, 0].set_yscale('log')
+    ax[0, 1].plot(iterations, diffusions.numpy())
+    ax[0, 1].set_ylabel("Diffusion")
+    ax[0, 1].set_xlabel("Iterations")
+    ax[0, 1].set_yscale('log')
+    ax[1, 0].plot(iterations, snr.numpy())
+    ax[1, 0].set_ylabel("SNR")
+    ax[1, 0].set_xlabel("Iterations")
+    ax[1, 0].set_yscale('log')
+    ax[1, 1].plot(iterations, train_loss, label='train')
+    ax[1, 1].plot(iterations, test_loss, label='test')
+    ax[1, 1].set_ylabel("Loss")
+    ax[1, 1].set_xlabel("Iterations")
+    ax[1, 1].legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path)
+    if show:
+        plt.show()
+
+    return fig
+
+
 def plot_drift_vs_diffusion(drift_vs_diffusion: List[torch.Tensor], save_path: Optional[Path] = None, show: bool = True
 ) -> plt.Figure:
     iterations = np.arange(len(drift_vs_diffusion))
@@ -125,8 +164,8 @@ def plot_drift_vs_diffusion(drift_vs_diffusion: List[torch.Tensor], save_path: O
     plt.plot(iterations, drift_vs_diffusion.numpy())
     plt.xlabel("Iterations")
     plt.ylabel("Drift vs Diffusion ratio")
+    plt.yscale("log")
     plt.grid(True, alpha=0.3)
-
     if save_path:
         plt.savefig(save_path)
     if show:

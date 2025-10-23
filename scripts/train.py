@@ -15,6 +15,7 @@ from scripts.plotting import (
     plot_loss_curves,
     plot_diagonal_modes,
     plot_off_diagonal_modes,
+    plot_drift_and_diffusion,
     plot_drift_vs_diffusion
 )
 from pathlib import Path
@@ -73,6 +74,8 @@ class Trainer:
         self.grad_norms: List[float] = []
         self.modes: List[torch.Tensor] = []
         self.drift_vs_diffusion: List[torch.Tensor] = []
+        self.drifts: List[torch.Tensor] = []
+        self.diffusions: List[torch.Tensor] = []
         self.logged_epochs: List[int] = []  # Track which epochs have full metrics
 
     @property
@@ -203,7 +206,11 @@ class Trainer:
                 # Compute drift-diffusion (can be at different interval if needed)
                 if epoch % self.cfg.drift_diffusion_interval == 0 or epoch == self.num_epochs - 1:
                     obs = DriftDiffusion(self.model, self.cfg, dataset=train, loss=self.loss)
-                    self.drift_vs_diffusion.append(obs.drift_diffusion_ratio())
+                    drift, diffusion = obs.compute_drift_and_diffusion()
+                    self.drifts.append(drift)
+                    self.diffusions.append(diffusion)
+                    snr = drift / (diffusion + 1e-12)
+                    self.drift_vs_diffusion.append(snr)
 
             # Save checkpoint at intervals
             if (
@@ -457,6 +464,8 @@ if __name__ == "__main__":
     train_loss = trainer.train_losses
     test_loss = trainer.test_losses
     modes = trainer.modes
+    drifts = trainer.drifts
+    diffusions = trainer.diffusions
     drift_vs_diffusion = trainer.drift_vs_diffusion
     logged_epochs = trainer.logged_epochs
 
@@ -471,21 +480,21 @@ if __name__ == "__main__":
     results_dir.mkdir(exist_ok=True)
 
     # Plot and save loss curves
-    fname = f"iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_loss.png"
+    fname = f"loss_iter_{len(train_loss)}_rank_{args.rank}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_progression_{args.progression}_noise_{args.noise_std}_dln.png"
     fpath = results_dir / fname
     plot_loss_curves(train_loss, test_loss, save_path=fpath, show=False)
     if args.wandb_mode != "disabled":
         wandb.log({"loss_curve": wandb.Image(str(fpath))})
 
     # Plot diagonal modes
-    fname = f"diagonal_mode_rank_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_loss.png"
+    fname = f"diagonal_mode_rank_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_progression_{args.progression}_noise_{args.noise_std}_dln.png"
     fpath = results_dir / fname
     plot_diagonal_modes(modes, args.rank, save_path=fpath, show=False)
     if args.wandb_mode != "disabled":
         wandb.log({"diagonal_modes": wandb.Image(str(fpath))})
 
     # Plot off-diagonal modes
-    fname = f"off_diagonal_mode_rank_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_loss.png"
+    fname = f"off_diagonal_mode_rank_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_progression_{args.progression}_noise_{args.noise_std}_dln.png"
     fpath = results_dir / fname
     plot_off_diagonal_modes(modes, save_path=fpath, show=False)
     if args.wandb_mode != "disabled":
@@ -493,8 +502,17 @@ if __name__ == "__main__":
 
     print(f"\nTraining complete! Results saved to {results_dir}")
 
+     # Plot drift and diffusion
+    fname = f"drift_diffusion_rank_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_progression_{args.progression}_noise_{args.noise_std}_dln.png"
+    fpath = results_dir / fname
+    plot_drift_and_diffusion(train_loss, test_loss, drift_vs_diffusion, drifts, diffusions, save_path=fpath, show=False)
+    if args.wandb_mode != "disabled":
+        wandb.log({"drift_and_diffusion": wandb.Image(str(fpath))})
+
+    print(f"\nTraining complete! Results saved to {results_dir}")
+
     # Plot drift vs diffusion
-    fname = f"drift_vs_diffusion_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_loss.png"
+    fname = f"SNR_rank_{args.rank}_iter_{len(train_loss)}_max_singular_value_{args.max_singular_value}_gamma_{args.gamma}_lr_{args.lr}_batch_{args.batch_size}_progression_{args.progression}_noise_{args.noise_std}_dln.png"
     fpath = results_dir / fname
     plot_drift_vs_diffusion(drift_vs_diffusion, save_path=fpath, show=False)
     if args.wandb_mode != "disabled":

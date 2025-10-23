@@ -87,7 +87,7 @@ class DriftDiffusion(nn.Module):
 
         Returns:
             drift: η ||∇L||_2 (learning rate × gradient norm)
-            diffusion: sqrt((η/B) 1/(N -1) Σ_i <\xi_i, \xi_i>) (noise magnitude)
+            diffusion: sqrt((η/B) 1/(N -1) Σ_i <xi_i, xi_i>) (noise magnitude)
         """
         was_training = self.model.training
         self.model.eval()
@@ -97,7 +97,7 @@ class DriftDiffusion(nn.Module):
         empirical_gradient = self.gradient_vector()
 
         # Compute drift from empirical gradient
-        drift = self.cfg.lr * torch.linalg.vector_norm(empirical_gradient)
+        drift = torch.linalg.vector_norm(empirical_gradient)
 
         # Compute diffusion by iterating over individual samples
         diffusion = torch.tensor(0.0, device=self.device)
@@ -130,4 +130,4 @@ class DriftDiffusion(nn.Module):
     def drift_diffusion_ratio(self) -> torch.Tensor:
         """Compute drift/diffusion ratio: (η ||∇L||) / 1/(N-1)*(sqrt((η/B)) Σ ||noise_i||)"""
         drift, diffusion = self.compute_drift_and_diffusion()
-        return drift / (diffusion + 1e-10)  # Add epsilon for numerical stability
+        return drift / (diffusion + 1e-12)  # Add epsilon for numerical stability
